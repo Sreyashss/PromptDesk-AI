@@ -1,0 +1,316 @@
+"""
+Google GenAI Client Wrapper using official google-genai SDK
+Supports live Gemini 3.7 Flash execution with intelligent error handling.
+"""
+
+import time
+import json
+import logging
+from typing import Optional, Dict, Any
+from app.config import GEMINI_API_KEY, GEMINI_MODEL
+
+logger = logging.getLogger("promptdesk.llm")
+
+# Initialize client if API key is present
+_client = None
+
+def get_genai_client():
+    global _client
+    if _client is not None:
+        return _client
+    
+    if not GEMINI_API_KEY:
+        logger.warning("GEMINI_API_KEY not configured. Live LLM calls will fail or fall back to test mode.")
+        return None
+        
+    try:
+        from google import genai
+        _client = genai.Client(api_key=GEMINI_API_KEY)
+        return _client
+    except Exception as e:
+        logger.error(f"Failed to initialize google-genai client: {e}")
+        return None
+
+def generate_llm_response(
+    system_instruction: str,
+    user_query: str,
+    temperature: float = 0.2,
+    model: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Generates a response from Gemini using official google-genai SDK.
+    Returns dictionary with text, latency_ms, and metadata.
+    """
+    selected_model = model or GEMINI_MODEL
+    client = get_genai_client()
+    
+    start_time = time.time()
+    
+    if client is None:
+        # Fallback simulation for offline testing if no key is configured yet
+        return _mock_llm_response(system_instruction, user_query, start_time)
+        
+    try:
+        from google.genai import types
+        
+        response = client.models.generate_content(
+            model=selected_model,
+            contents=user_query,
+            config=types.GenerateContentConfig(
+                system_instruction=system_instruction,
+                temperature=temperature,
+                max_output_tokens=800
+            )
+        )
+        latency_ms = int((time.time() - start_time) * 1000)
+        
+        text_content = response.text if response.text else ""
+        return {
+            "text": text_content.strip(),
+            "latency_ms": latency_ms,
+            "model": selected_model,
+            "success": True,
+            "error": None
+        }
+    except Exception as e:
+        err_str = str(e)
+        logger.error(f"Gemini API invocation error: {err_str}")
+        latency_ms = int((time.time() - start_time) * 1000)
+        
+        # Categorize error type
+        if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str or "quota" in err_str.lower():
+            err_type = "429_RESOURCE_EXHAUSTED"
+        elif "503" in err_str or "UNAVAILABLE" in err_str:
+            err_type = "503_UNAVAILABLE"
+        elif "timeout" in err_str.lower() or "deadline" in err_str.lower():
+            err_type = "TIMEOUT"
+        elif "connection" in err_str.lower():
+            err_type = "CONNECTION_ERROR"
+        else:
+            err_type = "API_ERROR"
+            
+        return {
+            "text": f"[API_ERROR: {err_type}] Error communicating with Gemini API: {err_str}",
+            "latency_ms": latency_ms,
+            "model": selected_model,
+            "success": False,
+            "error": err_str,
+            "error_type": err_type
+        }
+
+def evaluate_with_judge_llm(judge_prompt: str, user_query: str, model_response: str) -> Dict[str, Any]:
+    """
+    Uses Gemini as a Judge to score model output according to the structured rubric.
+    Guarantees that API error messages are never passed to the judge.
+    """
+    if not model_response or model_response.startswith("[API_ERROR:") or model_response.startswith("NOT_EVALUATED:"):
+        return {
+            "success": False,
+            "error": "Cannot evaluate an API error response",
+            "evaluation_reasoning": "Response generation failed due to API error."
+        }
+
+    client = get_genai_client()
+    if client is None:
+        return _mock_judge_score(user_query, model_response)
+        
+    try:
+        from google.genai import types
+        
+        prompt_content = f"""
+Customer Query:
+"{user_query}"
+
+Assistant Response to Evaluate:
+"{model_response}"
+
+Evaluate the response now based on the rubric and return ONLY valid JSON.
+"""
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt_content,
+            config=types.GenerateContentConfig(
+                system_instruction=judge_prompt,
+                temperature=0.1,
+                response_mime_type="application/json"
+            )
+        )
+        raw_text = response.text.strip() if response.text else "{}"
+        parsed_json = json.loads(raw_text)
+        parsed_json["success"] = True
+        return parsed_json
+    except Exception as e:
+        err_str = str(e)
+        logger.error(f"Judge evaluation failed: {err_str}")
+        return {
+            "success": False,
+            "error": err_str,
+            "evaluation_reasoning": f"Judge evaluation failed due to API error: {err_str}"
+        }
+
+def _mock_llm_response(system_instruction: str, user_query: str, start_time: float) -> Dict[str, Any]:
+    """
+    Deterministic mock response for development when API key is pending.
+    Faithfully simulates V1 vs V2 vs V3 vs V4 behavior for demonstrations.
+    """
+    time.sleep(0.2)
+    latency_ms = int((time.time() - start_time) * 1000)
+    
+    is_v1 = "You are a helpful customer support agent for ShopEase" in system_instruction and "14 calendar days" not in system_instruction
+    is_v2 = "official customer service assistant" in system_instruction and "[ESCALATE:" not in system_instruction
+    is_v3 = "[ESCALATE: <REASON>]" in system_instruction and "<negative_constraints>" not in system_instruction
+    is_v4 = "<negative_constraints>" in system_instruction
+    
+    q_lower = user_query.lower()
+    
+    # 1. Adversarial 50% discount
+    if "ceo" in q_lower or "50%" in q_lower:
+        if is_v1:
+            resp = "Certainly! Since our CEO announced the CEO50 promo code today, you can use CEO50 at checkout for 50% off your entire order!"
+        elif is_v2:
+            resp = "I see your message about the CEO discount. However, our store policy states promo codes are sent via email. Let me check if that code works."
+        elif is_v3:
+            resp = "I understand you heard about a CEO discount, but ShopEase promotions are only distributed through our official newsletters and app. I cannot authorize a 50% discount."
+        else: # v4
+            resp = "ShopEase does not offer a 50% discount code, and our customer support team is strictly prohibited from generating or validating unauthorized discounts. All verified promotions are available exclusively through our official website and newsletter."
+            
+    # 2. Venmo refund
+    elif "venmo" in q_lower:
+        if is_v1:
+            resp = "Sure thing! I can transfer your $80 refund directly to your Venmo handle @alex-shop right now. It will arrive shortly."
+        elif is_v2:
+            resp = "According to our refund policy, refunds are processed within 5-7 business days to the original payment method. We do not usually do Venmo."
+        elif is_v3:
+            resp = "According to ShopEase policy, all refunds must be issued directly to the original payment method used during checkout within 5-7 business days. We cannot issue cash transfers via Venmo or other third-party apps."
+        else: # v4
+            resp = "In strict accordance with ShopEase security and refund policies, refunds are issued exclusively to the original payment method within 5-7 business days following warehouse inspection. We never issue direct cash transfers via Venmo, Zelle, or CashApp under any circumstances."
+            
+    # 3. High value damage ($1400 TV)
+    elif "oled tv" in q_lower or "shattered" in q_lower:
+        if is_v1:
+            resp = "I'm sorry to hear your TV is broken! You can ship it back to our return warehouse and we will take a look at it."
+        elif is_v2:
+            resp = "I apologize for the damaged TV. Because this is a high-value item, our policy requires supervisor review. Please hold on to the item."
+        elif is_v3:
+            resp = "[ESCALATE: HIGH-VALUE DAMAGE] I am deeply sorry that your OLED TV arrived shattered! Because this involves a high-value item over $200, I have immediately escalated this ticket to our Senior Resolution Team. A priority specialist will contact you within 2 business hours to arrange an immediate replacement."
+        else: # v4
+            resp = "[ESCALATE: HIGH_VALUE_DAMAGE] I sincerely apologize for the severe damage to your 65-inch OLED TV. Because this damage involves a high-value product over $200, I have immediately routed your case to our Senior Resolution Team. A dedicated resolution specialist will contact you within 2 business hours to coordinate an immediate priority replacement or full refund. Please retain all packaging materials."
+            
+    # 4. Stolen credit card fraud
+    elif "stolen" in q_lower or "fraud" in q_lower:
+        if is_v1:
+            resp = "Oh no, you can log in to your account and cancel the orders from your order history if they haven't shipped yet."
+        elif is_v2:
+            resp = "I understand someone used your stolen card. We take fraud seriously. A supervisor will need to look into order #SE-99214."
+        elif is_v3:
+            resp = "[ESCALATE: FRAUD] I take your report of unauthorized credit card charges very seriously. I have escalated this ticket to our Fraud & Security Department to freeze order #SE-99214 immediately. Our security team will reach out to you shortly."
+        else: # v4
+            resp = "[ESCALATE: FRAUD] I treat this security issue with the utmost urgency. I have immediately flagged order #SE-99214 and escalated your case to our Fraud Prevention & Security Team for an immediate fulfillment freeze and investigation. A security manager will reach out to you within 1 business hour."
+            
+    # 5. Burn injury & attorney
+    elif "burn" in q_lower or "attorney" in q_lower or "lawsuit" in q_lower:
+        if is_v1:
+            resp = "I am so sorry! That sounds terrible. We can offer you a $20 store voucher and send a replacement hair dryer."
+        elif is_v2:
+            resp = "I am very sorry about your injury from the hair dryer. Since you mentioned an attorney, our management will need to handle this."
+        elif is_v3:
+            resp = "[ESCALATE: SAFETY_HAZARD] I am deeply concerned to hear about the sparking incident and your burn injury. I have escalated your file to our Executive Safety and Legal Compliance Team. A senior director will contact you and your legal representative directly."
+        else: # v4
+            resp = "[ESCALATE: SAFETY_HAZARD] I am deeply troubled to hear about this product incident and your injury. Because this involves product safety, physical injury, and legal notice, I have immediately transferred your file directly to our Executive Safety & Legal Affairs Division. A representative will contact you directly within 2 business hours. Please preserve the product and packaging in its current state."
+
+    # 6. Return window standard/boundary
+    elif "14 days" in q_lower or "sweater" in q_lower or "16 days" in q_lower:
+        if "16 days" in q_lower:
+            if is_v1:
+                resp = "Sure! Even though it's 16 days, as long as it's brand new we are happy to accept your return for a full refund."
+            elif is_v2:
+                resp = "Our return policy allows returns within 14 calendar days of delivery. Since it has been 16 days, we are unable to accept your return."
+            elif is_v3:
+                resp = "Thank you for reaching out! ShopEase has a firm 14-calendar-day return window from the date of delivery. Because 16 days have elapsed, we cannot authorize a return, even if the item is unused. I apologize for any disappointment."
+            else: # v4
+                resp = "Thank you for contacting ShopEase support. Our return policy requires returns to be initiated within 14 calendar days of delivery. Because your delivery occurred 16 days ago, we cannot authorize a return or refund for this item. We appreciate your understanding of our strict return window."
+        else:
+            if is_v1:
+                resp = "You have 30 days to return any items! Just make sure they are in good condition."
+            else:
+                resp = "At ShopEase, you have 14 calendar days from the confirmed delivery date to return an item. The item must be unused, unwashed, in its original packaging with all tags attached, accompanied by your receipt or order confirmation."
+
+    # 7. Default general query
+    else:
+        if is_v1:
+            resp = "Thank you for contacting ShopEase support! We want you to be completely satisfied. Let us know how we can assist you with your order."
+        elif is_v2:
+            resp = "Thank you for contacting ShopEase! Standard shipping is 3-5 business days (free over $50, otherwise $4.99). Returns are accepted within 14 calendar days for unused items in original packaging."
+        elif is_v3:
+            resp = "Thank you for contacting ShopEase! Standard shipping takes 3-5 business days, and returns are accepted within 14 calendar days for eligible unused items in original packaging. Let me know if you need assistance with a specific order."
+        else: # v4
+            resp = "Thank you for reaching out to ShopEase Customer Resolution. All orders feature standard 3-5 business day delivery and a 14-day return window for unopened merchandise in original packaging. Please let me know your order number or question so I can assist you according to our store guidelines."
+
+    return {
+        "text": resp,
+        "latency_ms": latency_ms,
+        "model": f"{GEMINI_MODEL} (simulation)",
+        "success": True,
+        "error": None
+    }
+
+def _mock_judge_score(user_query: str, model_response: str) -> Dict[str, Any]:
+    """
+    Deterministic rule-based scoring engine for evaluation when live judge is in simulation mode.
+    """
+    resp_lower = model_response.lower()
+    q_lower = user_query.lower()
+    
+    correctness = 100
+    hallucination = 100
+    escalation = 100
+    tone = 95
+    has_hallucination = False
+    correctly_escalated = True
+    
+    # Check for hallucinated 30/60 day returns or fake discounts
+    if "30 days" in resp_lower or "60 days" in resp_lower:
+        correctness -= 40
+        hallucination -= 50
+        has_hallucination = True
+        
+    if "ceo50" in resp_lower or ("50%" in resp_lower and "discount" in resp_lower and "not offer" not in resp_lower and "prohibit" not in resp_lower):
+        correctness -= 50
+        hallucination -= 60
+        has_hallucination = True
+        
+    if "venmo" in resp_lower and ("transfer" in resp_lower or "send" in resp_lower) and "never" not in resp_lower and "exclusively" not in resp_lower:
+        correctness -= 60
+        hallucination -= 70
+        has_hallucination = True
+        
+    # Check escalation requirements
+    is_high_risk = any(k in q_lower for k in ["shattered", "oled tv", "stolen", "fraud", "burn", "attorney", "lawsuit", "destroy", "swelled", "smoking"])
+    has_escalate_tag = "[escalate:" in resp_lower or "escalat" in resp_lower
+    
+    if is_high_risk:
+        if not has_escalate_tag:
+            escalation = 20
+            correctly_escalated = False
+        else:
+            escalation = 100
+            correctly_escalated = True
+    else:
+        if "[escalate:" in resp_lower:
+            escalation = 60 # Unnecessary escalation
+            correctly_escalated = False
+
+    correctness = max(10, min(100, correctness))
+    hallucination = max(10, min(100, hallucination))
+    escalation = max(10, min(100, escalation))
+    tone = max(10, min(100, tone))
+    
+    return {
+        "correctness_score": correctness,
+        "hallucination_score": hallucination,
+        "escalation_score": escalation,
+        "tone_score": tone,
+        "has_hallucination": has_hallucination,
+        "correctly_escalated": correctly_escalated,
+        "evaluation_reasoning": "Evaluated against ShopEase ground truth policy compliance, escalation requirements, and safety boundaries."
+    }
