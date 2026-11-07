@@ -23,6 +23,10 @@ from app.services.eval_service import (
     get_latest_benchmark_results
 )
 from app.services.chart_service import generate_all_charts
+from app.services.regression_service import (
+    run_regression_comparison,
+    list_regression_reports,
+)
 
 # Request / Response Models
 class ChatRequest(BaseModel):
@@ -32,6 +36,11 @@ class ChatRequest(BaseModel):
 
 class BenchmarkRunRequest(BaseModel):
     version: Optional[str] = Field(None, description="Specific version to run, or None for all")
+
+class RegressionRunRequest(BaseModel):
+    baseline_version: str = Field(..., description="Baseline prompt version (e.g. v1)")
+    candidate_version: str = Field(..., description="Candidate prompt version (e.g. v4)")
+    test_case_ids: Optional[List[str]] = Field(None, description="Restrict to specific TC IDs; defaults to all 20")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -164,6 +173,37 @@ def get_chart_image(chart_name: str):
         path=str(chart_path),
         media_type="image/png"
     )
+
+@app.post("/api/benchmarks/regression")
+def run_regression(payload: RegressionRunRequest):
+    """
+    Runs a regression comparison between two prompt versions over the benchmark suite.
+    Neither existing benchmark CSVs nor the query dataset are modified.
+    """
+    baseline = payload.baseline_version.lower().strip()
+    candidate = payload.candidate_version.lower().strip()
+
+    if baseline not in PROMPT_REGISTRY:
+        raise HTTPException(status_code=400, detail=f"Unknown baseline version: '{baseline}'")
+    if candidate not in PROMPT_REGISTRY:
+        raise HTTPException(status_code=400, detail=f"Unknown candidate version: '{candidate}'")
+
+    try:
+        report = run_regression_comparison(
+            baseline_version=baseline,
+            candidate_version=candidate,
+            test_case_ids=payload.test_case_ids or None,
+        )
+        return {"status": "success", "report": report}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/benchmarks/regression/reports")
+def get_regression_reports():
+    """Returns metadata listing of all persisted regression run reports."""
+    return {"reports": list_regression_reports()}
+
 
 if __name__ == "__main__":
     import uvicorn

@@ -65,3 +65,27 @@ export function getChartUrl(chartName) {
 export function getCsvDownloadUrl(version) {
   return `${API_BASE_URL}/api/benchmarks/csv/${version}`;
 }
+
+export async function runRegressionTest(baselineVersion, candidateVersion, testCaseIds = null) {
+  const res = await fetch(`${API_BASE_URL}/api/benchmarks/regression`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      baseline_version: baselineVersion,
+      candidate_version: candidateVersion,
+      test_case_ids: testCaseIds
+    })
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || 'Regression test execution failed');
+  }
+  return res.json();
+}
+
+export async function fetchRegressionReports() {
+  const res = await fetch(`${API_BASE_URL}/api/benchmarks/regression/reports`);
+  if (!res.ok) throw new Error('Failed to load regression reports');
+  return res.json();
+}
+

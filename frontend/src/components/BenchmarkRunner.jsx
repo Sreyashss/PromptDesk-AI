@@ -10,11 +10,14 @@ import {
   Filter, 
   Search,
   Layers,
-  ArrowRight
+  ArrowRight,
+  GitCompare
 } from 'lucide-react';
 import { fetchBenchmarkQueries, runBenchmarkSuite } from '../api/client';
+import RegressionTester from './RegressionTester';
 
 export default function BenchmarkRunner({ onSelectQueryForPlayground, onBenchmarkCompleted }) {
+  const [activePanel, setActivePanel] = useState('queries');
   const [queries, setQueries] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [searchFilter, setSearchFilter] = useState('');
@@ -91,6 +94,37 @@ export default function BenchmarkRunner({ onSelectQueryForPlayground, onBenchmar
 
   return (
     <div className="space-y-6">
+
+      {/* Panel tab switcher */}
+      <div className="flex gap-2 border-b border-slate-800 pb-4">
+        <button
+          onClick={() => setActivePanel('queries')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            activePanel === 'queries'
+              ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20'
+              : 'bg-slate-900 hover:bg-slate-800 text-slate-400 border border-slate-800'
+          }`}
+        >
+          <ShieldCheck className="w-3.5 h-3.5" />
+          20-Query Benchmark Suite
+        </button>
+        <button
+          onClick={() => setActivePanel('regression')}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+            activePanel === 'regression'
+              ? 'bg-violet-600 text-white shadow-md shadow-violet-500/20'
+              : 'bg-slate-900 hover:bg-slate-800 text-slate-400 border border-slate-800'
+          }`}
+        >
+          <GitCompare className="w-3.5 h-3.5" />
+          Regression Testing
+        </button>
+      </div>
+
+      {activePanel === 'regression' && <RegressionTester />}
+
+      {activePanel === 'queries' && (
+        <>
       
       {/* Header & Benchmark Controls */}
       <div className="p-6 rounded-2xl glass-panel border border-slate-800 bg-gradient-to-r from-slate-900 via-slate-900/60 to-emerald-950/30">
@@ -264,6 +298,8 @@ export default function BenchmarkRunner({ onSelectQueryForPlayground, onBenchmar
         ))}
       </div>
 
+        </>
+      )}
     </div>
   );
 }

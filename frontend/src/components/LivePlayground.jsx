@@ -12,7 +12,13 @@ import {
   Layers, 
   RefreshCw,
   Flame,
-  HelpCircle
+  HelpCircle,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
+  ChevronDown,
+  ChevronRight,
+  FileText
 } from 'lucide-react';
 import { sendChatQuery } from '../api/client';
 
@@ -304,10 +310,114 @@ export default function LivePlayground({ initialQuery = '' }) {
                   </div>
                 )}
 
-                {/* Response Text */}
-                <div className="mt-4 text-sm sm:text-base text-slate-100 whitespace-pre-wrap leading-relaxed">
-                  {chatResult.primary.response}
-                </div>
+                {/* Truncation / Token Limit Banner */}
+                {chatResult.primary.truncated && (
+                  <div className="mt-3 p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center space-x-2 font-medium">
+                    <AlertTriangle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+                    <span>
+                      Response Incomplete: Output token limit reached ({chatResult.primary.finish_reason})
+                    </span>
+                  </div>
+                )}
+
+                {/* Response Text or Friendly API Error Banner */}
+                {chatResult.primary.success === false ? (
+                  <div className="mt-4 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-sm leading-relaxed flex items-start space-x-2.5">
+                    <AlertCircle className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
+                    <div className="space-y-1">
+                      <p className="font-medium text-amber-100">{chatResult.primary.response}</p>
+                      {chatResult.primary.error_type && (
+                        <span className="inline-block text-[10px] font-mono text-amber-400/80 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                          {chatResult.primary.error_type}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-4 text-sm sm:text-base text-slate-100 whitespace-pre-wrap leading-relaxed">
+                    {chatResult.primary.response}
+                  </div>
+                )}
+
+                {/* AI Response Validator Panel */}
+                {chatResult.primary.validation && (
+                  <div className="mt-4 p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2.5">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center space-x-2">
+                        <ShieldCheck className="w-4 h-4 text-cyan-400" />
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
+                          AI Response Validator
+                        </span>
+                        <span className="text-[10px] text-slate-500 font-mono">
+                          (Rule-Based Guard)
+                        </span>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        {chatResult.primary.validation.was_corrected && (
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center">
+                            {chatResult.primary.validation.fallback_used ? 'Safe Fallback' : 'Auto-Corrected'}
+                          </span>
+                        )}
+
+                        {chatResult.primary.validation.status === 'PASS' && (
+                          <span className="px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center">
+                            <CheckCircle2 className="w-3 h-3 mr-1 text-emerald-400" /> PASS
+                          </span>
+                        )}
+                        {chatResult.primary.validation.status === 'FLAGGED' && (
+                          <span className="px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30 flex items-center">
+                            <AlertTriangle className="w-3 h-3 mr-1 text-rose-400" /> FLAGGED
+                          </span>
+                        )}
+                        {chatResult.primary.validation.status === 'NOT_EVALUATED' && (
+                          <span className="px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-slate-800 text-slate-400 border border-slate-700 flex items-center">
+                            <HelpCircle className="w-3 h-3 mr-1" /> NOT_EVALUATED
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Verification Checks List */}
+                    {chatResult.primary.validation.checks_performed?.length > 0 && (
+                      <div className="space-y-1.5 pt-2 border-t border-slate-800/80">
+                        {chatResult.primary.validation.checks_performed.map((check, idx) => (
+                          <div key={idx} className="flex items-start justify-between text-xs gap-2">
+                            <div className="flex items-center space-x-1.5 min-w-0">
+                              {check.status === 'PASS' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />}
+                              {check.status === 'FLAGGED' && <XCircle className="w-3.5 h-3.5 text-rose-400 flex-shrink-0" />}
+                              {check.status === 'NOT_EVALUATED' && <HelpCircle className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />}
+                              <span className="text-slate-300 font-medium truncate">{check.name}</span>
+                            </div>
+                            <span className="text-[10px] text-slate-400 font-mono whitespace-nowrap">{check.policy_reference}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Summary Note */}
+                    {chatResult.primary.validation.summary && (
+                      <div className="text-[11px] text-slate-400 italic pt-1">
+                        {chatResult.primary.validation.summary}
+                      </div>
+                    )}
+
+                    {/* Policy Traceability Panel */}
+                    <PolicyTracePanel validation={chatResult.primary.validation} />
+
+                    {/* Raw output toggle if corrected */}
+                    {chatResult.primary.validation.was_corrected && chatResult.primary.raw_response && (
+                      <details className="text-[11px] text-slate-400 pt-1 cursor-pointer">
+                        <summary className="hover:text-slate-200 transition-colors">
+                          View original unvalidated output
+                        </summary>
+                        <div className="mt-2 p-2.5 rounded-lg bg-rose-950/20 border border-rose-500/20 text-rose-200 font-mono text-[11px] whitespace-pre-wrap">
+                          {chatResult.primary.raw_response}
+                        </div>
+                      </details>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
@@ -359,10 +469,114 @@ export default function LivePlayground({ initialQuery = '' }) {
                     </div>
                   )}
 
-                  {/* Response Text */}
-                  <div className="mt-4 text-sm sm:text-base text-slate-100 whitespace-pre-wrap leading-relaxed">
-                    {chatResult.comparison.response}
-                  </div>
+                  {/* Truncation / Token Limit Banner */}
+                  {chatResult.comparison.truncated && (
+                    <div className="mt-3 p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center space-x-2 font-medium">
+                      <AlertTriangle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+                      <span>
+                        Response Incomplete: Output token limit reached ({chatResult.comparison.finish_reason})
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Response Text or Friendly API Error Banner */}
+                  {chatResult.comparison.success === false ? (
+                    <div className="mt-4 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-sm leading-relaxed flex items-start space-x-2.5">
+                      <AlertCircle className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
+                      <div className="space-y-1">
+                        <p className="font-medium text-amber-100">{chatResult.comparison.response}</p>
+                        {chatResult.comparison.error_type && (
+                          <span className="inline-block text-[10px] font-mono text-amber-400/80 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                            {chatResult.comparison.error_type}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-4 text-sm sm:text-base text-slate-100 whitespace-pre-wrap leading-relaxed">
+                      {chatResult.comparison.response}
+                    </div>
+                  )}
+
+                  {/* AI Response Validator Panel (Comparison Card) */}
+                  {chatResult.comparison.validation && (
+                    <div className="mt-4 p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2.5">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center space-x-2">
+                          <ShieldCheck className="w-4 h-4 text-amber-400" />
+                          <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
+                            AI Response Validator
+                          </span>
+                          <span className="text-[10px] text-slate-500 font-mono">
+                            (Rule-Based Guard)
+                          </span>
+                        </div>
+
+                        <div className="flex items-center space-x-2">
+                          {chatResult.comparison.validation.was_corrected && (
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center">
+                              {chatResult.comparison.validation.fallback_used ? 'Safe Fallback' : 'Auto-Corrected'}
+                            </span>
+                          )}
+
+                          {chatResult.comparison.validation.status === 'PASS' && (
+                            <span className="px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center">
+                              <CheckCircle2 className="w-3 h-3 mr-1 text-emerald-400" /> PASS
+                            </span>
+                          )}
+                          {chatResult.comparison.validation.status === 'FLAGGED' && (
+                            <span className="px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30 flex items-center">
+                              <AlertTriangle className="w-3 h-3 mr-1 text-rose-400" /> FLAGGED
+                            </span>
+                          )}
+                          {chatResult.comparison.validation.status === 'NOT_EVALUATED' && (
+                            <span className="px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-slate-800 text-slate-400 border border-slate-700 flex items-center">
+                              <HelpCircle className="w-3 h-3 mr-1" /> NOT_EVALUATED
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Verification Checks List */}
+                      {chatResult.comparison.validation.checks_performed?.length > 0 && (
+                        <div className="space-y-1.5 pt-2 border-t border-slate-800/80">
+                          {chatResult.comparison.validation.checks_performed.map((check, idx) => (
+                            <div key={idx} className="flex items-start justify-between text-xs gap-2">
+                              <div className="flex items-center space-x-1.5 min-w-0">
+                                {check.status === 'PASS' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />}
+                                {check.status === 'FLAGGED' && <XCircle className="w-3.5 h-3.5 text-rose-400 flex-shrink-0" />}
+                                {check.status === 'NOT_EVALUATED' && <HelpCircle className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />}
+                                <span className="text-slate-300 font-medium truncate">{check.name}</span>
+                              </div>
+                              <span className="text-[10px] text-slate-400 font-mono whitespace-nowrap">{check.policy_reference}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Summary Note */}
+                      {chatResult.comparison.validation.summary && (
+                        <div className="text-[11px] text-slate-400 italic pt-1">
+                          {chatResult.comparison.validation.summary}
+                        </div>
+                      )}
+
+                      {/* Policy Traceability Panel */}
+                      <PolicyTracePanel validation={chatResult.comparison.validation} isComparison />
+
+                      {/* Raw output toggle if corrected */}
+                      {chatResult.comparison.validation.was_corrected && chatResult.comparison.raw_response && (
+                        <details className="text-[11px] text-slate-400 pt-1 cursor-pointer">
+                          <summary className="hover:text-slate-200 transition-colors">
+                            View original unvalidated output
+                          </summary>
+                          <div className="mt-2 p-2.5 rounded-lg bg-rose-950/20 border border-rose-500/20 text-rose-200 font-mono text-[11px] whitespace-pre-wrap">
+                            {chatResult.comparison.raw_response}
+                          </div>
+                        </details>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
@@ -378,6 +592,208 @@ export default function LivePlayground({ initialQuery = '' }) {
         </div>
       )}
 
+    </div>
+  );
+}
+
+/**
+ * Compact, Explainable Policy Traceability Panel
+ * Displays rule-by-rule audit trail, policy citations, evidence excerpts, and validator action taken.
+ */
+function PolicyTracePanel({ validation, isComparison = false }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [expandedRules, setExpandedRules] = useState({});
+
+  const toggleRule = (ruleId) => {
+    setExpandedRules(prev => ({
+      ...prev,
+      [ruleId]: !prev[ruleId]
+    }));
+  };
+
+  const traceList = validation?.policy_trace;
+
+  if (!traceList || traceList.length === 0) {
+    return (
+      <div className="mt-2.5 pt-2.5 border-t border-slate-800/80">
+        <div className="p-2.5 rounded-lg bg-slate-900/60 border border-slate-800 text-[11px] text-slate-400 flex items-center space-x-2">
+          <HelpCircle className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+          <span>Policy traceability unavailable: Validation was skipped or no policy checks were performed for this response.</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Count summary
+  const passedCount = traceList.filter(t => t.status === 'PASS').length;
+  const flaggedCount = traceList.filter(t => t.status === 'FLAGGED').length;
+  const notEvalCount = traceList.filter(t => t.status === 'NOT_EVALUATED').length;
+
+  return (
+    <div className="mt-2.5 pt-2.5 border-t border-slate-800/80 space-y-2">
+      <button
+        type="button"
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full flex items-center justify-between text-left group hover:text-slate-200 transition-colors py-1"
+      >
+        <div className="flex items-center space-x-2 min-w-0">
+          <FileText className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
+          <span className="text-xs font-semibold text-slate-300 group-hover:text-cyan-300 transition-colors">
+            Policy Traceability & Audit Trail
+          </span>
+          <span className="text-[10px] text-slate-500 font-mono">
+            ({traceList.length} rules)
+          </span>
+        </div>
+        <div className="flex items-center space-x-2 flex-shrink-0">
+          <div className="flex items-center space-x-1 text-[10px] font-mono">
+            {flaggedCount > 0 && (
+              <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                {flaggedCount} flagged
+              </span>
+            )}
+            {passedCount > 0 && (
+              <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                {passedCount} pass
+              </span>
+            )}
+            {notEvalCount > 0 && (
+              <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">
+                {notEvalCount} N/A
+              </span>
+            )}
+          </div>
+          {isExpanded ? (
+            <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-200" />
+          ) : (
+            <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-200" />
+          )}
+        </div>
+      </button>
+
+      {/* Enforcement Lifecycle Banner: Clearly distinguish original check, action taken, and final outcome */}
+      {validation.was_corrected && (
+        <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-200 text-[11px] space-y-1.5">
+          <div className="font-semibold flex items-center space-x-1.5 text-amber-300">
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+            <span>Enforcement Lifecycle Summary</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-0.5 text-[10px] font-mono">
+            <div className="bg-slate-900/90 p-2 rounded border border-rose-500/30">
+              <span className="text-slate-400 block text-[9.5px]">1. Original Check:</span>
+              <span className="text-rose-400 font-bold">FLAGGED ({flaggedCount} violation{flaggedCount > 1 ? 's' : ''})</span>
+            </div>
+            <div className="bg-slate-900/90 p-2 rounded border border-amber-500/30">
+              <span className="text-slate-400 block text-[9.5px]">2. Action Taken:</span>
+              <span className="text-amber-300 font-bold">{validation.fallback_used ? 'SAFE_FALLBACK' : 'AUTO_CORRECTED'}</span>
+            </div>
+            <div className="bg-slate-900/90 p-2 rounded border border-emerald-500/30">
+              <span className="text-slate-400 block text-[9.5px]">3. Final Response:</span>
+              <span className="text-emerald-400 font-bold">{validation.status === 'PASS' ? 'COMPLIANT (PASS)' : 'FALLBACK ACTIVE'}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Expandable Trace Rows */}
+      {isExpanded && (
+        <div className="space-y-2 pt-1">
+          {traceList.map((trace) => {
+            const isRowOpen = expandedRules[trace.rule_id] ?? (trace.status !== 'NOT_EVALUATED');
+            return (
+              <div 
+                key={trace.rule_id} 
+                className={`rounded-lg border text-xs transition-all ${
+                  trace.status === 'FLAGGED' 
+                    ? 'bg-rose-950/20 border-rose-500/30' 
+                    : trace.status === 'PASS'
+                    ? 'bg-emerald-950/15 border-emerald-500/30'
+                    : 'bg-slate-900/40 border-slate-800'
+                }`}
+              >
+                {/* Header row */}
+                <div 
+                  onClick={() => toggleRule(trace.rule_id)}
+                  className="p-2.5 flex items-center justify-between cursor-pointer hover:bg-slate-800/40 rounded-lg transition-colors gap-2"
+                >
+                  <div className="flex items-center space-x-2 min-w-0">
+                    {trace.status === 'PASS' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />}
+                    {trace.status === 'FLAGGED' && <XCircle className="w-3.5 h-3.5 text-rose-400 flex-shrink-0" />}
+                    {trace.status === 'NOT_EVALUATED' && <HelpCircle className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />}
+                    
+                    <span className="font-medium text-slate-200 truncate">{trace.rule_name}</span>
+                    <span className="text-[10px] text-slate-500 font-mono hidden sm:inline">[{trace.rule_id}]</span>
+                  </div>
+
+                  <div className="flex items-center space-x-2 flex-shrink-0">
+                    {/* Status Badge */}
+                    {trace.status === 'PASS' && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                        PASS
+                      </span>
+                    )}
+                    {trace.status === 'FLAGGED' && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                        FLAGGED
+                      </span>
+                    )}
+                    {trace.status === 'NOT_EVALUATED' && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-400 border border-slate-700">
+                        NOT EVALUATED
+                      </span>
+                    )}
+
+                    {/* Action Taken Badge */}
+                    {trace.action_taken && trace.action_taken !== 'NONE' && trace.action_taken !== 'NOT_APPLICABLE' && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                        {trace.action_taken}
+                      </span>
+                    )}
+
+                    {isRowOpen ? (
+                      <ChevronDown className="w-3 h-3 text-slate-400" />
+                    ) : (
+                      <ChevronRight className="w-3 h-3 text-slate-400" />
+                    )}
+                  </div>
+                </div>
+
+                {/* Details Accordion Content */}
+                {isRowOpen && (
+                  <div className="px-2.5 pb-2.5 pt-1 border-t border-slate-800/60 space-y-2 text-[11px]">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[10px] font-mono text-slate-400">
+                      <div>
+                        <span className="text-slate-500">Policy Citation: </span>
+                        <span className="text-cyan-400 font-medium">{trace.policy_reference}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500">Action Taken: </span>
+                        <span className="text-slate-300 font-semibold">{trace.action_taken}</span>
+                      </div>
+                    </div>
+
+                    {/* Reason */}
+                    <div className="text-slate-300 leading-relaxed">
+                      <span className="font-semibold text-slate-400">Reason: </span>
+                      {trace.reason}
+                    </div>
+
+                    {/* Evidence Snippet */}
+                    {trace.evidence && (
+                      <div className="p-2 rounded bg-slate-950/80 border border-slate-800/80 font-mono text-[10.5px] text-slate-300 space-y-1">
+                        <span className="text-[10px] text-cyan-400 font-sans font-semibold uppercase tracking-wider block">
+                          Factual Evidence Excerpt:
+                        </span>
+                        <p className="italic text-slate-200">"{trace.evidence}"</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

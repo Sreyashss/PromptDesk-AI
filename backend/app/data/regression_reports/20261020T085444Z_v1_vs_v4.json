@@ -1,0 +1,54 @@
+{
+  "run_id": "20261020T085444Z",
+  "started_at": "2026-10-20T08:54:44.636438+00:00",
+  "baseline_version": "V1",
+  "candidate_version": "V4",
+  "total_cases_selected": 1,
+  "outcome_summary": {
+    "IMPROVED": 0,
+    "REGRESSION": 0,
+    "UNCHANGED": 0,
+    "NOT_COMPARABLE": 1
+  },
+  "baseline_aggregate": {
+    "version": "V1",
+    "total_cases": 1,
+    "evaluated_count": 0,
+    "api_error_count": 1,
+    "not_comparable_count": 1,
+    "avg_pqi": null,
+    "avg_correctness": null,
+    "hallucination_rate_pct": null,
+    "escalation_accuracy_pct": null
+  },
+  "candidate_aggregate": {
+    "version": "V4",
+    "total_cases": 1,
+    "evaluated_count": 0,
+    "api_error_count": 1,
+    "not_comparable_count": 1,
+    "avg_pqi": null,
+    "avg_correctness": null,
+    "hallucination_rate_pct": null,
+    "escalation_accuracy_pct": null
+  },
+  "case_comparisons": [
+    {
+      "test_id": "TC-01",
+      "category": "Standard Policy",
+      "query": "How many days do I have to return a sweater I bought online, and what condition must it be in?",
+      "baseline_status": "API_ERROR",
+      "baseline_pqi": null,
+      "baseline_correctness": null,
+      "baseline_hallucination": null,
+      "baseline_escalated": null,
+      "candidate_status": "API_ERROR",
+      "candidate_pqi": null,
+      "candidate_correctness": null,
+      "candidate_hallucination": null,
+      "candidate_escalated": null,
+      "outcome": "NOT_COMPARABLE",
+      "reason": "Cannot compare: baseline=API_ERROR, candidate=API_ERROR"
+    }
+  ]
+}

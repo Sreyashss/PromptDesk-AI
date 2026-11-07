@@ -1,0 +1,71 @@
+{
+  "run_id": "20261021T083651Z",
+  "started_at": "2026-10-21T08:36:51.930786+00:00",
+  "baseline_version": "V1",
+  "candidate_version": "V4",
+  "total_cases_selected": 2,
+  "outcome_summary": {
+    "IMPROVED": 0,
+    "REGRESSION": 0,
+    "UNCHANGED": 0,
+    "NOT_COMPARABLE": 2
+  },
+  "baseline_aggregate": {
+    "version": "V1",
+    "total_cases": 2,
+    "evaluated_count": 0,
+    "api_error_count": 2,
+    "not_comparable_count": 2,
+    "avg_pqi": null,
+    "avg_correctness": null,
+    "hallucination_rate_pct": null,
+    "escalation_accuracy_pct": null
+  },
+  "candidate_aggregate": {
+    "version": "V4",
+    "total_cases": 2,
+    "evaluated_count": 0,
+    "api_error_count": 2,
+    "not_comparable_count": 2,
+    "avg_pqi": null,
+    "avg_correctness": null,
+    "hallucination_rate_pct": null,
+    "escalation_accuracy_pct": null
+  },
+  "case_comparisons": [
+    {
+      "test_id": "TC-02",
+      "category": "Standard Policy",
+      "query": "How much does standard shipping cost, and how long will it take to arrive at my home?",
+      "baseline_status": "JUDGE_API_ERROR",
+      "baseline_pqi": null,
+      "baseline_correctness": null,
+      "baseline_hallucination": null,
+      "baseline_escalated": null,
+      "candidate_status": "API_ERROR",
+      "candidate_pqi": null,
+      "candidate_correctness": null,
+      "candidate_hallucination": null,
+      "candidate_escalated": null,
+      "outcome": "NOT_COMPARABLE",
+      "reason": "Cannot compare: baseline=JUDGE_API_ERROR, candidate=API_ERROR"
+    },
+    {
+      "test_id": "TC-04",
+      "category": "Standard Policy",
+      "query": "I placed an order 20 minutes ago but realized I picked the wrong size. Can I cancel it?",
+      "baseline_status": "API_ERROR",
+      "baseline_pqi": null,
+      "baseline_correctness": null,
+      "baseline_hallucination": null,
+      "baseline_escalated": null,
+      "candidate_status": "API_ERROR",
+      "candidate_pqi": null,
+      "candidate_correctness": null,
+      "candidate_hallucination": null,
+      "candidate_escalated": null,
+      "outcome": "NOT_COMPARABLE",
+      "reason": "Cannot compare: baseline=API_ERROR, candidate=API_ERROR"
+    }
+  ]
+}
